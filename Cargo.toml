@@ -1,0 +1,60 @@
+[package]
+name = "solana-event-stream"        # 包名称
+version = "0.1.0"                   # 包版本
+edition = "2021"                     # Rust edition，使用 2021 edition
+readme = "README.md"                 # README 文件路径
+
+[lib]
+crate-type = ["cdylib", "rlib"]     # 生成库类型：cdylib 可用于 FFI，rlib 用于 Rust crate
+
+[dependencies]
+# Solana 核心依赖
+solana-sdk = "3.0.0"                # Solana SDK 核心库
+solana-client = "3.0.4"             # Solana 客户端库，用于 RPC 调用
+solana-program = "3.0.0"            # Solana 程序（on-chain smart contract）相关类型
+solana-transaction-status = "3.0.4" # 查询交易状态
+solana-account-decoder = "3.0.4"    # 帐号解码工具
+solana-entry = "3.0.4"              # Solana Entry 结构和处理
+
+# 序列化/反序列化
+borsh = { version = "1.5.3", features = ["derive"] }  # Borsh 序列化，支持 derive 宏
+serde = { version = "1.0.215", features = ["derive"] } # Serde 序列化/反序列化
+serde-big-array = "0.5.1"          # 支持大数组序列化
+
+# 异步和 gRPC
+futures = "0.3.31"                 # Future trait 和异步工具
+tokio = { version = "1.42.0", features = ["full", "rt-multi-thread"]} # 异步运行时
+tonic = { version = "0.14.2", features = ["transport"] } # gRPC 客户端/服务端
+rustls = { version = "0.23.23", features = ["ring"], default-features = false } # TLS
+tonic-prost = "0.14.2"             # Tonic 与 Prost 结合使用
+
+# gRPC protobuf
+yellowstone-grpc-client = { version = "9.0.0" } # Yellowstone gRPC 客户端
+yellowstone-grpc-proto = { version = "9.0.0" }  # protobuf 定义
+
+# 数据处理和工具库
+bincode = "1.3.3"                   # 二进制序列化
+anyhow = "1.0.90"                   # 错误处理
+log = "0.4.22"                      # 日志
+chrono = "0.4.39"                   # 日期时间处理
+async-trait = "0.1.86"              # 异步 trait 支持
+lazy_static = "1.5.0"               # 延迟初始化静态变量
+once_cell = "1.20.3"                # 单次初始化静态/全局变量
+dashmap = "6.0.1"                   # 并发 HashMap
+prost = "0.14.1"                     # protobuf 编码
+prost-types = "0.14.1"              # protobuf 类型
+maplit = "1.0.2"                    # 快速创建 HashMap/HashSet 宏
+
+# 并发队列和锁
+crossbeam-queue = "0.3.12"          # 高性能并发队列
+parking_lot = "0.12.1"              # 高性能锁
+
+# SIMD/宽向量
+wide = "0.7"                        # SIMD 宽向量支持
+
+# SPL Token
+spl-token = "8.0.0"                  # Solana Token Program
+spl-token-2022 = "9.0.0"             # Solana Token Program 2022
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }  # 基准测试库，可生成 HTML 报告
