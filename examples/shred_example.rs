@@ -23,6 +23,9 @@ use solana_event_stream::{
         ShredStreamGrpc,
     },
 };
+use solana_event_stream::streaming::common::EventType;
+use solana_event_stream::streaming::event_parser::common::filter::EventTypeFilter;
+use solana_event_stream::streaming::event_parser::protocols::pumpfun::PumpFunMigrateEvent;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -40,7 +43,7 @@ async fn test_shreds() -> Result<(), Box<dyn std::error::Error>> {
     config.enable_metrics = true;
     //创建并初始化一个 ShredStream gRPC 客户端实例
     let shred_stream =
-        ShredStreamGrpc::new_with_config("http://rich.zan.top:9999".to_string(), config).await?;
+        ShredStreamGrpc::new_with_config("http://rich-us.zan.top:9999".to_string(), config).await?;
 
     let callback = create_event_callback();
     let protocols = vec![
@@ -50,10 +53,10 @@ async fn test_shreds() -> Result<(), Box<dyn std::error::Error>> {
 
     // Event filtering
     // No event filtering, includes all events
-    let event_type_filter = None;
+   // let event_type_filter = None;
     // Only include PumpSwapBuy events and PumpSwapSell events
-    // let event_type_filter =
-    //     EventTypeFilter { include: vec![EventType::PumpSwapBuy, EventType::PumpSwapSell] };
+     let event_type_filter =
+         EventTypeFilter { include: vec![EventType::PumpFunMigrate] };
 
     println!("Listening for events, press Ctrl+C to stop...");
     shred_stream.shredstream_subscribe(protocols, None, event_type_filter, callback).await?;
