@@ -12,7 +12,7 @@ const CLEANUP_BATCH_SIZE: usize = 100;
 struct SignatureAddresses {
     /// Developer addresses for this signature
     dev_addresses: BTreeSet<Pubkey>,
-    /// Bonk developer addresses for this signature  
+    /// Bonk developer addresses for this signature
     bonk_dev_addresses: BTreeSet<Pubkey>,
 }
 
@@ -53,11 +53,11 @@ impl GlobalState {
         let mut signatures_to_remove: Vec<Signature> = self.signature_data.iter()
             .map(|entry| *entry.key())
             .collect();
-        
+
         if signatures_to_remove.len() <= MAX_SIGNATURES {
             return; // Race condition, already cleaned up
         }
-        
+
         signatures_to_remove.truncate(CLEANUP_BATCH_SIZE);
 
         // Remove old signatures atomically
@@ -70,7 +70,7 @@ impl GlobalState {
     /// Add developer address for a specific signature (lock-free)
     pub fn add_dev_address(&self, signature: &Signature, address: Pubkey) {
         self.maybe_cleanup();
-        
+
         self.signature_data.entry(*signature)
             .and_modify(|addresses| {
                 addresses.dev_addresses.insert(address);
@@ -86,7 +86,7 @@ impl GlobalState {
     /// Add Bonk developer address for a specific signature (lock-free)
     pub fn add_bonk_dev_address(&self, signature: &Signature, address: Pubkey) {
         self.maybe_cleanup();
-        
+
         self.signature_data.entry(*signature)
             .and_modify(|addresses| {
                 addresses.bonk_dev_addresses.insert(address);

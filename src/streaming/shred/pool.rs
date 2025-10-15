@@ -31,10 +31,10 @@ impl TransactionWithSlotPool {
             None => Box::new(TransactionWithSlot::default()),
         };
 
-        PooledTransactionWithSlot { 
-            transaction, 
-            pool: Arc::clone(&self.pool), 
-            max_size: self.max_size 
+        PooledTransactionWithSlot {
+            transaction,
+            pool: Arc::clone(&self.pool),
+            max_size: self.max_size
         }
     }
 }
@@ -49,9 +49,9 @@ pub struct PooledTransactionWithSlot {
 impl PooledTransactionWithSlot {
     /// 从原始数据重置
     pub fn reset_from_data(
-        &mut self, 
-        transaction: VersionedTransaction, 
-        slot: u64, 
+        &mut self,
+        transaction: VersionedTransaction,
+        slot: u64,
         recv_us: i64
     ) {
         self.transaction.transaction = transaction;
@@ -137,23 +137,11 @@ lazy_static::lazy_static! {
     pub static ref GLOBAL_SHRED_POOL_MANAGER: ShredPoolManager = ShredPoolManager::new();
 }
 
-/// 便捷的全局工厂函数模块
+/// 便捷的全局工厂函数
 pub mod factory {
     use super::*;
 
-    /// 使用对象池创建 TransactionWithSlot 对象（推荐用于高性能场景）
-    ///
-    /// # 参数
-    /// - `transaction`: 待封装的 `VersionedTransaction` 对象，即原始交易
-    /// - `slot`: 当前交易所属的 Solana slot（区块号）
-    /// - `recv_us`: 接收时间，单位微秒（用于计算延迟或性能监控）
-    ///
-    /// # 返回
-    /// - 返回封装好的 `TransactionWithSlot` 对象
-    ///
-    /// # 说明
-    /// 这个函数内部使用全局对象池 `GLOBAL_SHRED_POOL_MANAGER` 来复用 `TransactionWithSlot` 对象，
-    /// 避免频繁分配和释放内存，从而提升高吞吐量场景下的性能。
+    /// 使用对象池创建 TransactionWithSlot（推荐用于高性能场景）
     pub fn create_transaction_with_slot_pooled(
         transaction: VersionedTransaction,
         slot: u64,
