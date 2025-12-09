@@ -4,7 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::streaming::{
     event_parser::{
-        common::EventMetadata,
+        common::{EventMetadata, EventType},
         protocols::pumpfun::{PumpFunBondingCurveAccountEvent, PumpFunGlobalAccountEvent},
         DexEvent,
     },
@@ -20,9 +20,10 @@ pub struct BondingCurve {
     pub token_total_supply: u64,
     pub complete: bool,
     pub creator: Pubkey,
+    pub is_mayhem_mode: bool,
 }
 
-pub const BONDING_CURVE_SIZE: usize = 8 * 5 + 1 + 32;
+pub const BONDING_CURVE_SIZE: usize = 8 * 5 + 1 + 32 + 1;
 
 pub fn bonding_curve_decode(data: &[u8]) -> Option<BondingCurve> {
     if data.len() < BONDING_CURVE_SIZE {
@@ -33,8 +34,10 @@ pub fn bonding_curve_decode(data: &[u8]) -> Option<BondingCurve> {
 
 pub fn bonding_curve_parser(
     account: &AccountPretty,
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountPumpFunBondingCurve;
+
     if account.data.len() < BONDING_CURVE_SIZE + 8 {
         return None;
     }
@@ -70,9 +73,13 @@ pub struct Global {
     pub fee_recipients: [Pubkey; 7],
     pub set_creator_authority: Pubkey,
     pub admin_set_creator_authority: Pubkey,
+    pub create_v2_enabled: bool,
+    pub whitelist_pda: Pubkey,
+    pub reserved_fee_recipient: Pubkey,
+    pub mayhem_mode_enabled: bool,
 }
 
-pub const GLOBAL_SIZE: usize = 1 + 32 * 2 + 8 * 5 + 32 + 1 + 8 * 2 + 32 * 7 + 32 * 2;
+pub const GLOBAL_SIZE: usize = 1 + 32 * 2 + 8 * 5 + 32 + 1 + 8 * 2 + 32 * 7 + 32 * 2 + 1 + 32 * 2 + 1;
 
 pub fn global_decode(data: &[u8]) -> Option<Global> {
     if data.len() < GLOBAL_SIZE {
@@ -81,7 +88,9 @@ pub fn global_decode(data: &[u8]) -> Option<Global> {
     borsh::from_slice::<Global>(&data[..GLOBAL_SIZE]).ok()
 }
 
-pub fn global_parser(account: &AccountPretty, metadata: EventMetadata) -> Option<DexEvent> {
+pub fn global_parser(account: &AccountPretty, mut metadata: EventMetadata) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountPumpFunGlobal;
+
     if account.data.len() < GLOBAL_SIZE + 8 {
         return None;
     }

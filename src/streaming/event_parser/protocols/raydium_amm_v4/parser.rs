@@ -1,6 +1,5 @@
 use crate::streaming::event_parser::{
-    common::{read_u64_le, EventMetadata, EventType, ProtocolType},
-    core::GenericEventParseConfig,
+    common::{read_u64_le, EventMetadata, EventType},
     protocols::raydium_amm_v4::{
         discriminators, RaydiumAmmV4DepositEvent, RaydiumAmmV4Initialize2Event,
         RaydiumAmmV4SwapEvent, RaydiumAmmV4WithdrawEvent, RaydiumAmmV4WithdrawPnlEvent,
@@ -9,80 +8,73 @@ use crate::streaming::event_parser::{
 };
 use solana_sdk::pubkey::Pubkey;
 
-/// Raydium CPMM程序ID
+/// Raydium AMM V4程序ID
 pub const RAYDIUM_AMM_V4_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8");
 
-// 配置所有事件类型
-pub const CONFIGS: &[GenericEventParseConfig] = &[
-    GenericEventParseConfig {
-        program_id: RAYDIUM_AMM_V4_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumAmmV4,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::SWAP_BASE_IN,
-        event_type: EventType::RaydiumAmmV4SwapBaseIn,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_swap_base_input_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_AMM_V4_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumAmmV4,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::SWAP_BASE_OUT,
-        event_type: EventType::RaydiumAmmV4SwapBaseOut,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_swap_base_output_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_AMM_V4_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumAmmV4,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::DEPOSIT,
-        event_type: EventType::RaydiumAmmV4Deposit,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_deposit_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_AMM_V4_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumAmmV4,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::INITIALIZE2,
-        event_type: EventType::RaydiumAmmV4Initialize2,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_initialize2_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_AMM_V4_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumAmmV4,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::WITHDRAW,
-        event_type: EventType::RaydiumAmmV4Withdraw,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_withdraw_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_AMM_V4_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumAmmV4,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::WITHDRAW_PNL,
-        event_type: EventType::RaydiumAmmV4WithdrawPnl,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_withdraw_pnl_instruction),
-        requires_inner_instruction: false,
-    },
-];
+/// 解析 Raydium AMM V4 instruction data
+///
+/// 根据判别器路由到具体的 instruction 解析函数
+pub fn parse_raydium_amm_v4_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::SWAP_BASE_IN => {
+            parse_swap_base_input_instruction(data, accounts, metadata)
+        }
+        discriminators::SWAP_BASE_OUT => {
+            parse_swap_base_output_instruction(data, accounts, metadata)
+        }
+        discriminators::DEPOSIT => parse_deposit_instruction(data, accounts, metadata),
+        discriminators::INITIALIZE2 => parse_initialize2_instruction(data, accounts, metadata),
+        discriminators::WITHDRAW => parse_withdraw_instruction(data, accounts, metadata),
+        discriminators::WITHDRAW_PNL => {
+            parse_withdraw_pnl_instruction(data, accounts, metadata)
+        }
+        _ => None,
+    }
+}
+
+/// 解析 Raydium AMM V4 inner instruction data
+///
+/// Raydium AMM V4 没有 inner instruction 事件
+pub fn parse_raydium_amm_v4_inner_instruction_data(
+    _discriminator: &[u8],
+    _data: &[u8],
+    _metadata: EventMetadata,
+) -> Option<DexEvent> {
+    None
+}
+
+
+/// 解析 Raydium AMM V4 账户数据
+///
+/// 根据判别器路由到具体的账户解析函数
+pub fn parse_raydium_amm_v4_account_data(
+    discriminator: &[u8],
+    account: &crate::streaming::grpc::AccountPretty,
+    metadata: crate::streaming::event_parser::common::EventMetadata,
+) -> Option<crate::streaming::event_parser::DexEvent> {
+    match discriminator {
+        discriminators::AMM_INFO => {
+            crate::streaming::event_parser::protocols::raydium_amm_v4::types::amm_info_parser(account, metadata)
+        }
+        _ => None,
+    }
+}
+
 
 /// 解析提现指令事件
 fn parse_withdraw_pnl_instruction(
     _data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumAmmV4WithdrawPnl;
+
     if accounts.len() < 17 {
         return None;
     }
@@ -113,8 +105,10 @@ fn parse_withdraw_pnl_instruction(
 fn parse_withdraw_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumAmmV4Withdraw;
+
     if data.len() < 8 || accounts.len() < 22 {
         return None;
     }
@@ -153,8 +147,10 @@ fn parse_withdraw_instruction(
 fn parse_initialize2_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumAmmV4Initialize2;
+
     if data.len() < 25 || accounts.len() < 21 {
         return None;
     }
@@ -198,8 +194,10 @@ fn parse_initialize2_instruction(
 fn parse_deposit_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumAmmV4Deposit;
+
     if data.len() < 24 || accounts.len() < 14 {
         return None;
     }
@@ -234,8 +232,10 @@ fn parse_deposit_instruction(
 fn parse_swap_base_output_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumAmmV4SwapBaseOut;
+
     if data.len() < 16 || accounts.len() < 17 {
         return None;
     }
@@ -281,8 +281,10 @@ fn parse_swap_base_output_instruction(
 fn parse_swap_base_input_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumAmmV4SwapBaseIn;
+
     if data.len() < 16 || accounts.len() < 17 {
         return None;
     }

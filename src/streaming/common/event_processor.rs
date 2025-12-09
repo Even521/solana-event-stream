@@ -18,12 +18,19 @@ fn create_metrics_callback(
     callback: Arc<dyn Fn(DexEvent) + Send + Sync>,
 ) -> Arc<dyn Fn(DexEvent) + Send + Sync> {
     Arc::new(move |event: DexEvent| {
-        let processing_time_us = event.metadata().handle_us as f64;
+        let metadata = event.metadata();
+        let processing_time_us = metadata.handle_us as f64;
+        let recv_us = metadata.recv_us;
+        let block_time_ms = metadata.block_time_ms;
+
         callback(event);
-        MetricsManager::global().update_metrics(
+
+        update_metrics_with_latency(
             MetricsEventType::Transaction,
             1,
             processing_time_us,
+            recv_us,
+            block_time_ms,
         );
     })
 }
@@ -64,7 +71,7 @@ pub async fn process_grpc_transaction(
 
             let adapter_callback = create_metrics_callback(callback.clone());
 
-            EventParser::parse_grpc_transaction_owned(
+            EventParser::parse_grpc_transaction(
                 protocols,
                 event_type_filter,
                 grpc_tx,
@@ -123,29 +130,41 @@ pub async fn process_shred_transaction(
     let recv_us = transaction_with_slot.recv_us;
 
     let adapter_callback = create_metrics_callback(callback);
+    let accounts = tx.message.static_account_keys();
 
-    // 异步解析 VersionedTransaction 并生成事件
-    // EventParser 是事件解析器，用于处理 Solana 交易并提取 DexEvent
-    EventParser::parse_versioned_transaction_owned(
-        protocols,              // 支持的协议列表，用于判断交易属于哪种协议
-        event_type_filter,      // 可选的事件类型过滤器，只处理特定类型事件
-        tx,                     // 待解析的 VersionedTransaction（交易对象）
-        signature,              // 交易签名，用于标识交易
-        Some(slot),             // 区块高度 slot，可选
-        None,                   // 区块时间 block_time，这里没有提供
-        recv_us,                // 接收时间戳（微秒），用于事件排序或延迟计算
-        bot_wallet,             // 可选机器人钱包地址，可能用于过滤或标记事件
-        None,                   // 交易索引，可选，未提供
-        &[],                    // 内层指令列表 inner_instructions，这里为空
-        adapter_callback,       // 回调函数，事件解析完成后调用
+    EventParser::parse_instruction_events_from_versioned_transaction(
+        protocols,
+        event_type_filter,
+        &tx,
+        signature,
+        Some(slot),
+        None,
+        recv_us,
+        accounts,
+        &[],
+        bot_wallet,
+        None,
+        adapter_callback,
     )
-        .await?;                     // 等待异步解析完成，如果出错直接返回 Err，否则继续
+        .await?;
 
     Ok(())
 }
 
-/// Update metrics for event processing
+/// Update metrics for event processing (with optional latency check)
 #[inline]
 fn update_metrics(ty: MetricsEventType, count: u64, time_us: f64) {
     MetricsManager::global().update_metrics(ty, count, time_us);
+}
+
+/// Update metrics with latency check
+#[inline]
+fn update_metrics_with_latency(
+    ty: MetricsEventType,
+    count: u64,
+    time_us: f64,
+    recv_us: i64,
+    block_time_ms: i64,
+) {
+    MetricsManager::global().update_metrics_with_latency(ty, count, time_us, recv_us, block_time_ms);
 }

@@ -1,7 +1,8 @@
+
 use borsh::BorshDeserialize;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use tracing::warn;
+
 use crate::streaming::event_parser::common::EventMetadata;
 use crate::streaming::event_parser::protocols::pumpfun::types::{BondingCurve, Global};
 
@@ -22,18 +23,160 @@ pub struct PumpFunCreateTokenEvent {
     pub real_token_reserves: u64,
     pub token_total_supply: u64,
     #[borsh(skip)]
+    pub token_program: Pubkey,
+    #[borsh(skip)]
+    pub is_mayhem_mode: bool,
+    #[borsh(skip)]
     pub mint_authority: Pubkey,
     #[borsh(skip)]
     pub associated_bonding_curve: Pubkey,
 }
 
-pub const PUMPFUN_CREATE_TOKEN_EVENT_LOG_SIZE: usize = 257;
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, BorshDeserialize)]
+pub struct PumpFunCreateV2TokenEvent {
+    #[borsh(skip)]
+    pub metadata: EventMetadata,
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+    pub mint: Pubkey,
+    pub bonding_curve: Pubkey,
+    pub user: Pubkey,
+    pub creator: Pubkey,
+    pub timestamp: i64,
+    pub virtual_token_reserves: u64,
+    pub virtual_sol_reserves: u64,
+    pub real_token_reserves: u64,
+    pub token_total_supply: u64,
+    pub token_program: Pubkey,
+    pub is_mayhem_mode: bool,
+    #[borsh(skip)]
+    pub mint_authority: Pubkey,
+    #[borsh(skip)]
+    pub associated_bonding_curve: Pubkey,
+}
 
-pub fn pumpfun_create_token_event_log_decode(data: &[u8]) -> Option<PumpFunCreateTokenEvent> {
-    if data.len() < PUMPFUN_CREATE_TOKEN_EVENT_LOG_SIZE {
+pub fn pumpfun_create_v2_token_event_log_decode(data: &[u8]) -> Option<PumpFunCreateV2TokenEvent> {
+    let mut offset = 0;
+
+    // 解析 name 字符串: [长度(4字节 u32)][字符串内容]
+    if data.len() < offset + 4 {
         return None;
     }
-    borsh::from_slice::<PumpFunCreateTokenEvent>(&data[..PUMPFUN_CREATE_TOKEN_EVENT_LOG_SIZE]).ok()
+    let name_len = u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?) as usize;
+    offset += 4;
+    if data.len() < offset + name_len {
+        return None;
+    }
+    let name = String::from_utf8(data[offset..offset + name_len].to_vec()).ok()?;
+    offset += name_len;
+
+    // 解析 symbol 字符串
+    if data.len() < offset + 4 {
+        return None;
+    }
+    let symbol_len = u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?) as usize;
+    offset += 4;
+    if data.len() < offset + symbol_len {
+        return None;
+    }
+    let symbol = String::from_utf8(data[offset..offset + symbol_len].to_vec()).ok()?;
+    offset += symbol_len;
+
+    // 解析 uri 字符串
+    if data.len() < offset + 4 {
+        return None;
+    }
+    let uri_len = u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?) as usize;
+    offset += 4;
+    if data.len() < offset + uri_len {
+        return None;
+    }
+    let uri = String::from_utf8(data[offset..offset + uri_len].to_vec()).ok()?;
+    offset += uri_len;
+
+    // 解析 Pubkey 字段 (每个32字节)
+    if data.len() < offset + 32 {
+        return None;
+    }
+    let mint = Pubkey::new_from_array(data[offset..offset + 32].try_into().ok()?);
+    offset += 32;
+
+    if data.len() < offset + 32 {
+        return None;
+    }
+    let bonding_curve = Pubkey::new_from_array(data[offset..offset + 32].try_into().ok()?);
+    offset += 32;
+
+    if data.len() < offset + 32 {
+        return None;
+    }
+    let user = Pubkey::new_from_array(data[offset..offset + 32].try_into().ok()?);
+    offset += 32;
+
+    if data.len() < offset + 32 {
+        return None;
+    }
+    let creator = Pubkey::new_from_array(data[offset..offset + 32].try_into().ok()?);
+    offset += 32;
+
+    // 解析数值字段
+    if data.len() < offset + 8 {
+        return None;
+    }
+    let timestamp = i64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
+    offset += 8;
+
+    if data.len() < offset + 8 {
+        return None;
+    }
+    let virtual_token_reserves = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
+    offset += 8;
+
+    if data.len() < offset + 8 {
+        return None;
+    }
+    let virtual_sol_reserves = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
+    offset += 8;
+
+    if data.len() < offset + 8 {
+        return None;
+    }
+    let real_token_reserves = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
+    offset += 8;
+
+    if data.len() < offset + 8 {
+        return None;
+    }
+    let token_total_supply = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
+    offset += 8;
+
+    // 如果数据长度足够,解析 V2 版本的额外字段: token_program (32字节) + is_mayhem_mode (1字节)
+    let (token_program, is_mayhem_mode) = if data.len() >= offset + 33 {
+        let token_program = Pubkey::new_from_array(data[offset..offset + 32].try_into().ok()?);
+        let is_mayhem_mode = data[offset + 32] == 1;
+        (token_program, is_mayhem_mode)
+    } else {
+        (Pubkey::default(), false)
+    };
+
+    Some(PumpFunCreateV2TokenEvent {
+        name,
+        symbol,
+        uri,
+        mint,
+        bonding_curve,
+        user,
+        creator,
+        timestamp,
+        virtual_token_reserves,
+        virtual_sol_reserves,
+        real_token_reserves,
+        token_total_supply,
+        token_program,
+        is_mayhem_mode,
+        ..Default::default()
+    })
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, BorshDeserialize)]
@@ -101,6 +244,10 @@ pub struct PumpFunTradeEvent {
     pub global_volume_accumulator: Pubkey,
     #[borsh(skip)]
     pub user_volume_accumulator: Pubkey,
+    #[borsh(skip)]
+    pub fee_config: Pubkey,
+    #[borsh(skip)]
+    pub fee_program: Pubkey,
 }
 
 pub const PUMPFUN_TRADE_EVENT_LOG_SIZE: usize = 250;
@@ -171,7 +318,6 @@ pub struct PumpFunMigrateEvent {
 pub const PUMPFUN_MIGRATE_EVENT_LOG_SIZE: usize = 160;
 
 pub fn pumpfun_migrate_event_log_decode(data: &[u8]) -> Option<PumpFunMigrateEvent> {
-    warn!("===pumpfun_migrate_event_log_decode===  {:?}",data);
     if data.len() < PUMPFUN_MIGRATE_EVENT_LOG_SIZE {
         return None;
     }
@@ -219,6 +365,7 @@ pub mod discriminators {
 
     // 指令鉴别器
     pub const CREATE_TOKEN_IX: &[u8] = &[24, 30, 200, 40, 5, 28, 7, 119];
+    pub const CREATE_V2_TOKEN_IX: &[u8] = &[214, 144, 76, 236, 95, 139, 49, 180];
     pub const BUY_IX: &[u8] = &[102, 6, 61, 18, 1, 218, 235, 234];
     pub const SELL_IX: &[u8] = &[51, 230, 133, 164, 1, 127, 131, 173];
     pub const MIGRATE_IX: &[u8] = &[155, 234, 231, 146, 236, 158, 162, 30];

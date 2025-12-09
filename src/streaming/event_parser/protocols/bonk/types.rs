@@ -4,7 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::streaming::{
     event_parser::{
-        common::EventMetadata,
+        common::{EventMetadata, EventType},
         protocols::bonk::{
             BonkGlobalConfigAccountEvent, BonkPlatformConfigAccountEvent, BonkPoolStateAccountEvent,
         },
@@ -132,7 +132,9 @@ pub fn pool_state_decode(data: &[u8]) -> Option<PoolState> {
     borsh::from_slice::<PoolState>(&data[..POOL_STATE_SIZE]).ok()
 }
 
-pub fn pool_state_parser(account: &AccountPretty, metadata: EventMetadata) -> Option<DexEvent> {
+pub fn pool_state_parser(account: &AccountPretty, mut metadata: EventMetadata) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountBonkPoolState;
+
     if account.data.len() < POOL_STATE_SIZE + 8 {
         return None;
     }
@@ -182,8 +184,10 @@ pub fn global_config_decode(data: &[u8]) -> Option<GlobalConfig> {
 
 pub fn global_config_parser(
     account: &AccountPretty,
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountBonkGlobalConfig;
+
     if account.data.len() < GLOBAL_CONFIG_SIZE + 8 {
         return None;
     }
@@ -228,8 +232,10 @@ pub fn platform_config_decode(data: &[u8]) -> Option<PlatformConfig> {
 
 pub fn platform_config_parser(
     account: &AccountPretty,
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountBonkPlatformConfig;
+
     if account.data.len() < PLATFORM_CONFIG_SIZE + 8 {
         return None;
     }

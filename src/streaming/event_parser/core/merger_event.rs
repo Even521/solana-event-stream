@@ -1,4 +1,3 @@
-use log::warn;
 use crate::streaming::event_parser::DexEvent;
 
 pub fn merge(instruction_event: &mut DexEvent, cpi_log_event: DexEvent) {
@@ -26,7 +25,7 @@ pub fn merge(instruction_event: &mut DexEvent, cpi_log_event: DexEvent) {
             _ => {}
         },
         DexEvent::PumpFunCreateTokenEvent(e) => match cpi_log_event {
-            DexEvent::PumpFunCreateTokenEvent(cpie) => {
+            DexEvent::PumpFunCreateV2TokenEvent(cpie) => {
                 e.mint = cpie.mint;
                 e.bonding_curve = cpie.bonding_curve;
                 e.user = cpie.user;
@@ -36,13 +35,29 @@ pub fn merge(instruction_event: &mut DexEvent, cpi_log_event: DexEvent) {
                 e.virtual_sol_reserves = cpie.virtual_sol_reserves;
                 e.real_token_reserves = cpie.real_token_reserves;
                 e.token_total_supply = cpie.token_total_supply;
+                e.token_program = cpie.token_program;
+                e.is_mayhem_mode = cpie.is_mayhem_mode;
+            }
+            _ => {}
+        },
+        DexEvent::PumpFunCreateV2TokenEvent(e) => match cpi_log_event {
+            DexEvent::PumpFunCreateV2TokenEvent(cpie) => {
+                e.mint = cpie.mint;
+                e.bonding_curve = cpie.bonding_curve;
+                e.user = cpie.user;
+                e.creator = cpie.creator;
+                e.timestamp = cpie.timestamp;
+                e.virtual_token_reserves = cpie.virtual_token_reserves;
+                e.virtual_sol_reserves = cpie.virtual_sol_reserves;
+                e.real_token_reserves = cpie.real_token_reserves;
+                e.token_total_supply = cpie.token_total_supply;
+                e.token_program = cpie.token_program;
+                e.is_mayhem_mode = cpie.is_mayhem_mode;
             }
             _ => {}
         },
         DexEvent::PumpFunMigrateEvent(e) => match cpi_log_event {
-
             DexEvent::PumpFunMigrateEvent(cpie) => {
-                warn!("cpi_log_event{:?}",cpie);
                 e.user = cpie.user;
                 e.mint = cpie.mint;
                 e.mint_amount = cpie.mint_amount;
@@ -220,6 +235,136 @@ pub fn merge(instruction_event: &mut DexEvent, cpi_log_event: DexEvent) {
                 e.user_base_token_account = cpie.user_base_token_account;
                 e.user_quote_token_account = cpie.user_quote_token_account;
                 e.user_pool_token_account = cpie.user_pool_token_account;
+            }
+            _ => {}
+        },
+        DexEvent::MeteoraDammV2SwapEvent(e) => match cpi_log_event {
+            DexEvent::MeteoraDammV2SwapEvent(cpie) => {
+                e.pool = cpie.pool;
+                e.trade_direction = cpie.trade_direction;
+                e.collect_fee_mode = cpie.collect_fee_mode;
+                e.has_referral = cpie.has_referral;
+                e.amount_0 = cpie.amount_0;
+                e.amount_1 = cpie.amount_1;
+                e.swap_mode = cpie.swap_mode;
+                e.included_fee_input_amount = cpie.included_fee_input_amount;
+                e.excluded_fee_input_amount = cpie.excluded_fee_input_amount;
+                e.amount_left = cpie.amount_left;
+                e.output_amount = cpie.output_amount;
+                e.next_sqrt_price = cpie.next_sqrt_price;
+                e.trading_fee = cpie.trading_fee;
+                e.partner_fee = cpie.partner_fee;
+                e.referral_fee = cpie.referral_fee;
+                e.included_transfer_fee_amount_in = cpie.included_transfer_fee_amount_in;
+                e.included_transfer_fee_amount_out = cpie.included_transfer_fee_amount_out;
+                e.excluded_transfer_fee_amount_out = cpie.excluded_transfer_fee_amount_out;
+                e.current_timestamp = cpie.current_timestamp;
+                e.reserve_a_amount = cpie.reserve_a_amount;
+                e.reserve_b_amount = cpie.reserve_b_amount;
+            }
+            _ => {}
+        },
+        DexEvent::MeteoraDammV2Swap2Event(e) => match cpi_log_event {
+            DexEvent::MeteoraDammV2SwapEvent(cpie) => {
+                e.pool = cpie.pool;
+                e.trade_direction = cpie.trade_direction;
+                e.collect_fee_mode = cpie.collect_fee_mode;
+                e.has_referral = cpie.has_referral;
+                e.amount_0 = cpie.amount_0;
+                e.amount_1 = cpie.amount_1;
+                e.swap_mode = cpie.swap_mode;
+                e.included_fee_input_amount = cpie.included_fee_input_amount;
+                e.excluded_fee_input_amount = cpie.excluded_fee_input_amount;
+                e.amount_left = cpie.amount_left;
+                e.output_amount = cpie.output_amount;
+                e.next_sqrt_price = cpie.next_sqrt_price;
+                e.trading_fee = cpie.trading_fee;
+                e.partner_fee = cpie.partner_fee;
+                e.referral_fee = cpie.referral_fee;
+                e.included_transfer_fee_amount_in = cpie.included_transfer_fee_amount_in;
+                e.included_transfer_fee_amount_out = cpie.included_transfer_fee_amount_out;
+                e.excluded_transfer_fee_amount_out = cpie.excluded_transfer_fee_amount_out;
+                e.current_timestamp = cpie.current_timestamp;
+                e.reserve_a_amount = cpie.reserve_a_amount;
+                e.reserve_b_amount = cpie.reserve_b_amount;
+            }
+            _ => {}
+        },
+        DexEvent::MeteoraDammV2InitializePoolEvent(e) => match cpi_log_event {
+            DexEvent::MeteoraDammV2InitializePoolEvent(cpie) => {
+                e.pool = cpie.pool;
+                e.token_a_mint = cpie.token_a_mint;
+                e.token_b_mint = cpie.token_b_mint;
+                e.creator = cpie.creator;
+                e.payer = cpie.payer;
+                e.alpha_vault = cpie.alpha_vault;
+                e.pool_fees = cpie.pool_fees;
+                e.sqrt_min_price = cpie.sqrt_min_price;
+                e.sqrt_max_price = cpie.sqrt_max_price;
+                e.activation_type = cpie.activation_type;
+                e.collect_fee_mode = cpie.collect_fee_mode;
+                e.liquidity = cpie.liquidity;
+                e.sqrt_price = cpie.sqrt_price;
+                e.activation_point = cpie.activation_point;
+                e.token_a_flag = cpie.token_a_flag;
+                e.token_b_flag = cpie.token_b_flag;
+                e.token_a_amount = cpie.token_a_amount;
+                e.token_b_amount = cpie.token_b_amount;
+                e.total_amount_a = cpie.total_amount_a;
+                e.total_amount_b = cpie.total_amount_b;
+                e.pool_type = cpie.pool_type;
+            }
+            _ => {}
+        },
+        DexEvent::MeteoraDammV2InitializeCustomizablePoolEvent(e) => match cpi_log_event {
+            DexEvent::MeteoraDammV2InitializePoolEvent(cpie) => {
+                e.pool = cpie.pool;
+                e.token_a_mint = cpie.token_a_mint;
+                e.token_b_mint = cpie.token_b_mint;
+                e.creator = cpie.creator;
+                e.payer = cpie.payer;
+                e.alpha_vault = cpie.alpha_vault;
+                e.pool_fees = cpie.pool_fees;
+                e.sqrt_min_price = cpie.sqrt_min_price;
+                e.sqrt_max_price = cpie.sqrt_max_price;
+                e.activation_type = cpie.activation_type;
+                e.collect_fee_mode = cpie.collect_fee_mode;
+                e.liquidity = cpie.liquidity;
+                e.sqrt_price = cpie.sqrt_price;
+                e.activation_point = cpie.activation_point;
+                e.token_a_flag = cpie.token_a_flag;
+                e.token_b_flag = cpie.token_b_flag;
+                e.token_a_amount = cpie.token_a_amount;
+                e.token_b_amount = cpie.token_b_amount;
+                e.total_amount_a = cpie.total_amount_a;
+                e.total_amount_b = cpie.total_amount_b;
+                e.pool_type = cpie.pool_type;
+            }
+            _ => {}
+        },
+        DexEvent::MeteoraDammV2InitializePoolWithDynamicConfigEvent(e) => match cpi_log_event {
+            DexEvent::MeteoraDammV2InitializePoolEvent(cpie) => {
+                e.pool = cpie.pool;
+                e.token_a_mint = cpie.token_a_mint;
+                e.token_b_mint = cpie.token_b_mint;
+                e.creator = cpie.creator;
+                e.payer = cpie.payer;
+                e.alpha_vault = cpie.alpha_vault;
+                e.pool_fees = cpie.pool_fees;
+                e.sqrt_min_price = cpie.sqrt_min_price;
+                e.sqrt_max_price = cpie.sqrt_max_price;
+                e.activation_type = cpie.activation_type;
+                e.collect_fee_mode = cpie.collect_fee_mode;
+                e.liquidity = cpie.liquidity;
+                e.sqrt_price = cpie.sqrt_price;
+                e.activation_point = cpie.activation_point;
+                e.token_a_flag = cpie.token_a_flag;
+                e.token_b_flag = cpie.token_b_flag;
+                e.token_a_amount = cpie.token_a_amount;
+                e.token_b_amount = cpie.token_b_amount;
+                e.total_amount_a = cpie.total_amount_a;
+                e.total_amount_b = cpie.total_amount_b;
+                e.pool_type = cpie.pool_type;
             }
             _ => {}
         },

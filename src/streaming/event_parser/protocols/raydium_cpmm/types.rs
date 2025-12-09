@@ -4,7 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::streaming::{
     event_parser::{
-        common::EventMetadata,
+        common::{EventMetadata, EventType},
         protocols::raydium_cpmm::{
             RaydiumCpmmAmmConfigAccountEvent, RaydiumCpmmPoolStateAccountEvent,
         },
@@ -36,7 +36,9 @@ pub fn amm_config_decode(data: &[u8]) -> Option<AmmConfig> {
     borsh::from_slice::<AmmConfig>(&data[..AMM_CONFIG_SIZE]).ok()
 }
 
-pub fn amm_config_parser(account: &AccountPretty, metadata: EventMetadata) -> Option<DexEvent> {
+pub fn amm_config_parser(account: &AccountPretty, mut metadata: EventMetadata) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountRaydiumCpmmAmmConfig;
+
     if account.data.len() < AMM_CONFIG_SIZE + 8 {
         return None;
     }
@@ -91,7 +93,9 @@ pub fn pool_state_decode(data: &[u8]) -> Option<PoolState> {
     borsh::from_slice::<PoolState>(&data[..POOL_STATE_SIZE]).ok()
 }
 
-pub fn pool_state_parser(account: &AccountPretty, metadata: EventMetadata) -> Option<DexEvent> {
+pub fn pool_state_parser(account: &AccountPretty, mut metadata: EventMetadata) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountRaydiumCpmmPoolState;
+
     if account.data.len() < POOL_STATE_SIZE + 8 {
         return None;
     }

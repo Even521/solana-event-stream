@@ -5,7 +5,7 @@ edition = "2021"                     # Rust edition，使用 2021 edition
 readme = "README.md"                 # README 文件路径
 
 [lib]
-crate-type = ["cdylib", "rlib"]     # 生成库类型：cdylib 可用于 FFI，rlib 用于 Rust crate
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 solana-sdk = "3.0.0"
@@ -67,6 +67,7 @@ spl-token = "8.0.0"
 spl-token-2022 = "9.0.0"
 solana-commitment-config = { version = "3.0.0", features = ["serde"] }
 tonic-prost = "0.14.2"
+tracing-subscriber = "0.3.22"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

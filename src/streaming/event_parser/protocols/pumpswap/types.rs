@@ -4,7 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::streaming::{
     event_parser::{
-        common::EventMetadata,
+        common::{EventMetadata, EventType},
         protocols::pumpswap::{PumpSwapGlobalConfigAccountEvent, PumpSwapPoolAccountEvent},
         DexEvent,
     },
@@ -20,9 +20,12 @@ pub struct GlobalConfig {
     pub protocol_fee_recipients: [Pubkey; 8],
     pub coin_creator_fee_basis_points: u64,
     pub admin_set_coin_creator_authority: Pubkey,
+    pub whitelist_pda: Pubkey,
+    pub reserved_fee_recipient: Pubkey,
+    pub mayhem_mode_enabled: bool,
 }
 
-pub const GLOBAL_CONFIG_SIZE: usize = 32 + 8 + 8 + 1 + 32 * 8 + 8 + 32;
+pub const GLOBAL_CONFIG_SIZE: usize = 32 + 8 + 8 + 1 + 32 * 8 + 8 + 32 + 32 + 32 + 1;
 
 pub fn global_config_decode(data: &[u8]) -> Option<GlobalConfig> {
     if data.len() < GLOBAL_CONFIG_SIZE {
@@ -33,8 +36,10 @@ pub fn global_config_decode(data: &[u8]) -> Option<GlobalConfig> {
 
 pub fn global_config_parser(
     account: &AccountPretty,
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountPumpSwapGlobalConfig;
+
     if account.data.len() < GLOBAL_CONFIG_SIZE + 8 {
         return None;
     }
@@ -65,9 +70,10 @@ pub struct Pool {
     pub pool_quote_token_account: Pubkey,
     pub lp_supply: u64,
     pub coin_creator: Pubkey,
+    pub is_mayhem_mode: bool,
 }
 
-pub const POOL_SIZE: usize = 1 + 2 + 32 * 6 + 8 + 32;
+pub const POOL_SIZE: usize = 1 + 2 + 32 * 6 + 8 + 32 + 1;
 
 pub fn pool_decode(data: &[u8]) -> Option<Pool> {
     if data.len() < POOL_SIZE {
@@ -76,7 +82,9 @@ pub fn pool_decode(data: &[u8]) -> Option<Pool> {
     borsh::from_slice::<Pool>(&data[..POOL_SIZE]).ok()
 }
 
-pub fn pool_parser(account: &AccountPretty, metadata: EventMetadata) -> Option<DexEvent> {
+pub fn pool_parser(account: &AccountPretty, mut metadata: EventMetadata) -> Option<DexEvent> {
+    metadata.event_type = EventType::AccountPumpSwapPool;
+
     if account.data.len() < POOL_SIZE + 8 {
         return None;
     }

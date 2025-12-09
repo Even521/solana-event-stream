@@ -1,8 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
 use crate::streaming::event_parser::{
-    common::{utils::*, EventMetadata, EventType, ProtocolType},
-    core::GenericEventParseConfig,
+    common::{utils::*, EventMetadata, EventType},
     protocols::bonk::{
         bonk_pool_create_event_log_decode, bonk_trade_event_log_decode, discriminators, AmmFeeOn,
         BonkMigrateToAmmEvent, BonkMigrateToCpswapEvent, BonkPoolCreateEvent, BonkTradeEvent,
@@ -16,104 +15,95 @@ use crate::streaming::event_parser::{
 pub const BONK_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj");
 
-// Configure all event types
-pub const CONFIGS: &[GenericEventParseConfig] = &[
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: discriminators::TRADE_EVENT,
-        instruction_discriminator: discriminators::BUY_EXACT_IN,
-        event_type: EventType::BonkBuyExactIn,
-        inner_instruction_parser: Some(parse_trade_inner_instruction),
-        instruction_parser: Some(parse_buy_exact_in_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: discriminators::TRADE_EVENT,
-        instruction_discriminator: discriminators::BUY_EXACT_OUT,
-        event_type: EventType::BonkBuyExactOut,
-        inner_instruction_parser: Some(parse_trade_inner_instruction),
-        instruction_parser: Some(parse_buy_exact_out_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: discriminators::TRADE_EVENT,
-        instruction_discriminator: discriminators::SELL_EXACT_IN,
-        event_type: EventType::BonkSellExactIn,
-        inner_instruction_parser: Some(parse_trade_inner_instruction),
-        instruction_parser: Some(parse_sell_exact_in_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: discriminators::TRADE_EVENT,
-        instruction_discriminator: discriminators::SELL_EXACT_OUT,
-        event_type: EventType::BonkSellExactOut,
-        inner_instruction_parser: Some(parse_trade_inner_instruction),
-        instruction_parser: Some(parse_sell_exact_out_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: discriminators::POOL_CREATE_EVENT,
-        instruction_discriminator: discriminators::INITIALIZE,
-        event_type: EventType::BonkInitialize,
-        inner_instruction_parser: Some(parse_pool_create_inner_instruction),
-        instruction_parser: Some(parse_initialize_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: discriminators::POOL_CREATE_EVENT,
-        instruction_discriminator: discriminators::INITIALIZE_V2,
-        event_type: EventType::BonkInitializeV2,
-        inner_instruction_parser: Some(parse_pool_create_inner_instruction),
-        instruction_parser: Some(parse_initialize_v2_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: discriminators::POOL_CREATE_EVENT,
-        instruction_discriminator: discriminators::INITIALIZE_WITH_TOKEN_2022,
-        event_type: EventType::BonkInitializeWithToken2022,
-        inner_instruction_parser: Some(parse_pool_create_inner_instruction),
-        instruction_parser: Some(parse_initialize_with_token_2022_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::MIGRATE_TO_AMM,
-        event_type: EventType::BonkMigrateToAmm,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_migrate_to_amm_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: BONK_PROGRAM_ID,
-        protocol_type: ProtocolType::Bonk,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::MIGRATE_TO_CP_SWAP,
-        event_type: EventType::BonkMigrateToCpswap,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_migrate_to_cpswap_instruction),
-        requires_inner_instruction: false,
-    },
-];
+/// 解析 Bonk instruction data
+///
+/// 根据判别器路由到具体的 instruction 解析函数
+pub fn parse_bonk_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::BUY_EXACT_IN => {
+            parse_buy_exact_in_instruction(data, accounts, metadata)
+        }
+        discriminators::BUY_EXACT_OUT => {
+            parse_buy_exact_out_instruction(data, accounts, metadata)
+        }
+        discriminators::SELL_EXACT_IN => {
+            parse_sell_exact_in_instruction(data, accounts, metadata)
+        }
+        discriminators::SELL_EXACT_OUT => {
+            parse_sell_exact_out_instruction(data, accounts, metadata)
+        }
+        discriminators::INITIALIZE => {
+            parse_initialize_instruction(data, accounts, metadata)
+        }
+        discriminators::INITIALIZE_V2 => {
+            parse_initialize_v2_instruction(data, accounts, metadata)
+        }
+        discriminators::INITIALIZE_WITH_TOKEN_2022 => {
+            parse_initialize_with_token_2022_instruction(data, accounts, metadata)
+        }
+        discriminators::MIGRATE_TO_AMM => {
+            parse_migrate_to_amm_instruction(data, accounts, metadata)
+        }
+        discriminators::MIGRATE_TO_CP_SWAP => {
+            parse_migrate_to_cpswap_instruction(data, accounts, metadata)
+        }
+        _ => None,
+    }
+}
+
+/// 解析 Bonk inner instruction data
+///
+/// 根据判别器路由到具体的 inner instruction 解析函数
+pub fn parse_bonk_inner_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::TRADE_EVENT => {
+            parse_trade_inner_instruction(data, metadata)
+        }
+        discriminators::POOL_CREATE_EVENT => {
+            parse_pool_create_inner_instruction(data, metadata)
+        }
+        _ => None,
+    }
+}
+
+/// 解析 Bonk 账户数据
+///
+/// 根据判别器路由到具体的账户解析函数
+pub fn parse_bonk_account_data(
+    discriminator: &[u8],
+    account: &crate::streaming::grpc::AccountPretty,
+    metadata: crate::streaming::event_parser::common::EventMetadata,
+) -> Option<crate::streaming::event_parser::DexEvent> {
+    match discriminator {
+        discriminators::POOL_STATE_ACCOUNT => {
+            crate::streaming::event_parser::protocols::bonk::types::pool_state_parser(account, metadata)
+        }
+        discriminators::GLOBAL_CONFIG_ACCOUNT => {
+            crate::streaming::event_parser::protocols::bonk::types::global_config_parser(account, metadata)
+        }
+        discriminators::PLATFORM_CONFIG_ACCOUNT => {
+            crate::streaming::event_parser::protocols::bonk::types::platform_config_parser(account, metadata)
+        }
+        _ => None,
+    }
+}
+
 /// Parse pool creation event
 fn parse_pool_create_inner_instruction(
     data: &[u8],
     metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    // Note: event_type will be set by the instruction parser, not here
+    // Because different initialize instructions have different event types
     if let Some(event) = bonk_pool_create_event_log_decode(data) {
         Some(DexEvent::BonkPoolCreateEvent(BonkPoolCreateEvent { metadata, ..event }))
     } else {
@@ -146,8 +136,10 @@ fn parse_trade_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option
 fn parse_buy_exact_in_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkBuyExactIn;
+
     if data.len() < 16 || accounts.len() < 18 {
         return None;
     }
@@ -184,8 +176,10 @@ fn parse_buy_exact_in_instruction(
 fn parse_buy_exact_out_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkBuyExactOut;
+
     if data.len() < 16 || accounts.len() < 18 {
         return None;
     }
@@ -222,8 +216,10 @@ fn parse_buy_exact_out_instruction(
 fn parse_sell_exact_in_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkSellExactIn;
+
     if data.len() < 16 || accounts.len() < 18 {
         return None;
     }
@@ -260,8 +256,10 @@ fn parse_sell_exact_in_instruction(
 fn parse_sell_exact_out_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkSellExactOut;
+
     if data.len() < 16 || accounts.len() < 18 {
         return None;
     }
@@ -299,8 +297,10 @@ fn parse_sell_exact_out_instruction(
 fn parse_initialize_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkInitialize;
+
     if data.len() < 24 {
         return None;
     }
@@ -332,8 +332,10 @@ fn parse_initialize_instruction(
 fn parse_initialize_v2_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkInitializeV2;
+
     if data.len() < 24 {
         return None;
     }
@@ -371,8 +373,10 @@ fn parse_initialize_v2_instruction(
 fn parse_initialize_with_token_2022_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkInitializeWithToken2022;
+
     if data.len() < 24 {
         return None;
     }
@@ -515,8 +519,10 @@ fn parse_vesting_params(data: &[u8], offset: &mut usize) -> Option<VestingParams
 fn parse_migrate_to_amm_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkMigrateToAmm;
+
     if data.len() < 16 {
         return None;
     }
@@ -570,8 +576,10 @@ fn parse_migrate_to_amm_instruction(
 fn parse_migrate_to_cpswap_instruction(
     _data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::BonkMigrateToCpswap;
+
     Some(DexEvent::BonkMigrateToCpswapEvent(BonkMigrateToCpswapEvent {
         metadata,
         payer: accounts[0],

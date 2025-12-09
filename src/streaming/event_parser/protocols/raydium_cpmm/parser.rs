@@ -1,8 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
 use crate::streaming::event_parser::{
-    common::{read_u64_le, EventMetadata, EventType, ProtocolType},
-    core::GenericEventParseConfig,
+    common::{read_u64_le, EventMetadata, EventType},
     protocols::raydium_cpmm::{
         discriminators, RaydiumCpmmDepositEvent, RaydiumCpmmInitializeEvent, RaydiumCpmmSwapEvent,
         RaydiumCpmmWithdrawEvent,
@@ -14,66 +13,69 @@ use crate::streaming::event_parser::{
 pub const RAYDIUM_CPMM_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C");
 
-// 配置所有事件类型
-pub const CONFIGS: &[GenericEventParseConfig] = &[
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CPMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumCpmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::SWAP_BASE_IN,
-        event_type: EventType::RaydiumCpmmSwapBaseInput,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_swap_base_input_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CPMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumCpmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::SWAP_BASE_OUT,
-        event_type: EventType::RaydiumCpmmSwapBaseOutput,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_swap_base_output_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CPMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumCpmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::DEPOSIT,
-        event_type: EventType::RaydiumCpmmDeposit,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_deposit_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CPMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumCpmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::INITIALIZE,
-        event_type: EventType::RaydiumCpmmInitialize,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_initialize_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CPMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumCpmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::WITHDRAW,
-        event_type: EventType::RaydiumCpmmWithdraw,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_withdraw_instruction),
-        requires_inner_instruction: false,
-    },
-];
+/// 解析 Raydium CPMM instruction data
+///
+/// 根据判别器路由到具体的 instruction 解析函数
+pub fn parse_raydium_cpmm_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::SWAP_BASE_IN => {
+            parse_swap_base_input_instruction(data, accounts, metadata)
+        }
+        discriminators::SWAP_BASE_OUT => {
+            parse_swap_base_output_instruction(data, accounts, metadata)
+        }
+        discriminators::DEPOSIT => parse_deposit_instruction(data, accounts, metadata),
+        discriminators::INITIALIZE => parse_initialize_instruction(data, accounts, metadata),
+        discriminators::WITHDRAW => parse_withdraw_instruction(data, accounts, metadata),
+        _ => None,
+    }
+}
+
+/// 解析 Raydium CPMM inner instruction data
+///
+/// Raydium CPMM 没有 inner instruction 事件
+pub fn parse_raydium_cpmm_inner_instruction_data(
+    _discriminator: &[u8],
+    _data: &[u8],
+    _metadata: EventMetadata,
+) -> Option<DexEvent> {
+    None
+}
+
+
+/// 解析 Raydium CPMM 账户数据
+///
+/// 根据判别器路由到具体的账户解析函数
+pub fn parse_raydium_cpmm_account_data(
+    discriminator: &[u8],
+    account: &crate::streaming::grpc::AccountPretty,
+    metadata: crate::streaming::event_parser::common::EventMetadata,
+) -> Option<crate::streaming::event_parser::DexEvent> {
+    match discriminator {
+        discriminators::AMM_CONFIG => {
+            crate::streaming::event_parser::protocols::raydium_cpmm::types::amm_config_parser(account, metadata)
+        }
+        discriminators::POOL_STATE => {
+            crate::streaming::event_parser::protocols::raydium_cpmm::types::pool_state_parser(account, metadata)
+        }
+        _ => None,
+    }
+}
+
 
 /// 解析提款指令事件
 fn parse_withdraw_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumCpmmWithdraw;
+
     if data.len() < 24 || accounts.len() < 14 {
         return None;
     }
@@ -103,8 +105,10 @@ fn parse_withdraw_instruction(
 fn parse_initialize_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumCpmmInitialize;
+
     if data.len() < 24 || accounts.len() < 20 {
         return None;
     }
@@ -140,8 +144,10 @@ fn parse_initialize_instruction(
 fn parse_deposit_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumCpmmDeposit;
+
     if data.len() < 24 || accounts.len() < 13 {
         return None;
     }
@@ -170,8 +176,10 @@ fn parse_deposit_instruction(
 fn parse_swap_base_input_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumCpmmSwapBaseInput;
+
     if data.len() < 16 || accounts.len() < 13 {
         return None;
     }
@@ -203,8 +211,10 @@ fn parse_swap_base_input_instruction(
 fn parse_swap_base_output_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumCpmmSwapBaseOutput;
+
     if data.len() < 16 || accounts.len() < 13 {
         return None;
     }

@@ -1,6 +1,5 @@
 use crate::streaming::event_parser::{
-    common::{read_u64_le, EventMetadata, EventType, ProtocolType},
-    core::GenericEventParseConfig,
+    common::{read_u64_le, EventMetadata, EventType},
     protocols::pumpswap::{
         discriminators, pump_swap_buy_event_log_decode, pump_swap_create_pool_event_log_decode,
         pump_swap_deposit_event_log_decode, pump_swap_sell_event_log_decode,
@@ -15,62 +14,70 @@ use solana_sdk::pubkey::Pubkey;
 pub const PUMPSWAP_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
 
-// 配置所有事件类型
-pub const CONFIGS: &[GenericEventParseConfig] = &[
-    GenericEventParseConfig {
-        program_id: PUMPSWAP_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpSwap,
-        inner_instruction_discriminator: discriminators::BUY_EVENT,
-        instruction_discriminator: discriminators::BUY_IX,
-        event_type: EventType::PumpSwapBuy,
-        inner_instruction_parser: Some(parse_buy_inner_instruction),
-        instruction_parser: Some(parse_buy_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: PUMPSWAP_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpSwap,
-        inner_instruction_discriminator: discriminators::SELL_EVENT,
-        instruction_discriminator: discriminators::SELL_IX,
-        event_type: EventType::PumpSwapSell,
-        inner_instruction_parser: Some(parse_sell_inner_instruction),
-        instruction_parser: Some(parse_sell_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: PUMPSWAP_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpSwap,
-        inner_instruction_discriminator: discriminators::CREATE_POOL_EVENT,
-        instruction_discriminator: discriminators::CREATE_POOL_IX,
-        event_type: EventType::PumpSwapCreatePool,
-        inner_instruction_parser: Some(parse_create_pool_inner_instruction),
-        instruction_parser: Some(parse_create_pool_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: PUMPSWAP_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpSwap,
-        inner_instruction_discriminator: discriminators::DEPOSIT_EVENT,
-        instruction_discriminator: discriminators::DEPOSIT_IX,
-        event_type: EventType::PumpSwapDeposit,
-        inner_instruction_parser: Some(parse_deposit_inner_instruction),
-        instruction_parser: Some(parse_deposit_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: PUMPSWAP_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpSwap,
-        inner_instruction_discriminator: discriminators::WITHDRAW_EVENT,
-        instruction_discriminator: discriminators::WITHDRAW_IX,
-        event_type: EventType::PumpSwapWithdraw,
-        inner_instruction_parser: Some(parse_withdraw_inner_instruction),
-        instruction_parser: Some(parse_withdraw_instruction),
-        requires_inner_instruction: false,
-    },
-];
+/// 解析 PumpSwap instruction data
+///
+/// 根据判别器路由到具体的 instruction 解析函数
+pub fn parse_pumpswap_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::BUY_IX => parse_buy_instruction(data, accounts, metadata),
+        discriminators::SELL_IX => parse_sell_instruction(data, accounts, metadata),
+        discriminators::CREATE_POOL_IX => {
+            parse_create_pool_instruction(data, accounts, metadata)
+        }
+        discriminators::DEPOSIT_IX => parse_deposit_instruction(data, accounts, metadata),
+        discriminators::WITHDRAW_IX => parse_withdraw_instruction(data, accounts, metadata),
+        _ => None,
+    }
+}
+
+/// 解析 PumpSwap inner instruction data
+///
+/// 根据判别器路由到具体的 inner instruction 解析函数
+pub fn parse_pumpswap_inner_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::BUY_EVENT => parse_buy_inner_instruction(data, metadata),
+        discriminators::SELL_EVENT => parse_sell_inner_instruction(data, metadata),
+        discriminators::CREATE_POOL_EVENT => {
+            parse_create_pool_inner_instruction(data, metadata)
+        }
+        discriminators::DEPOSIT_EVENT => parse_deposit_inner_instruction(data, metadata),
+        discriminators::WITHDRAW_EVENT => parse_withdraw_inner_instruction(data, metadata),
+        _ => None,
+    }
+}
+
+
+/// 解析 PumpSwap 账户数据
+///
+/// 根据判别器路由到具体的账户解析函数
+pub fn parse_pumpswap_account_data(
+    discriminator: &[u8],
+    account: &crate::streaming::grpc::AccountPretty,
+    metadata: crate::streaming::event_parser::common::EventMetadata,
+) -> Option<crate::streaming::event_parser::DexEvent> {
+    match discriminator {
+        discriminators::GLOBAL_CONFIG_ACCOUNT => {
+            crate::streaming::event_parser::protocols::pumpswap::types::global_config_parser(account, metadata)
+        }
+        discriminators::POOL_ACCOUNT => {
+            crate::streaming::event_parser::protocols::pumpswap::types::pool_parser(account, metadata)
+        }
+        _ => None,
+    }
+}
 
 /// 解析买入日志事件
 fn parse_buy_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option<DexEvent> {
+    // Note: event_type will be set by instruction parser
     if let Some(event) = pump_swap_buy_event_log_decode(data) {
         Some(DexEvent::PumpSwapBuyEvent(PumpSwapBuyEvent { metadata, ..event }))
     } else {
@@ -80,6 +87,7 @@ fn parse_buy_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option<D
 
 /// 解析卖出日志事件
 fn parse_sell_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option<DexEvent> {
+    // Note: event_type will be set by instruction parser
     if let Some(event) = pump_swap_sell_event_log_decode(data) {
         Some(DexEvent::PumpSwapSellEvent(PumpSwapSellEvent { metadata, ..event }))
     } else {
@@ -92,6 +100,7 @@ fn parse_create_pool_inner_instruction(
     data: &[u8],
     metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    // Note: event_type will be set by instruction parser
     if let Some(event) = pump_swap_create_pool_event_log_decode(data) {
         Some(DexEvent::PumpSwapCreatePoolEvent(PumpSwapCreatePoolEvent { metadata, ..event }))
     } else {
@@ -101,6 +110,7 @@ fn parse_create_pool_inner_instruction(
 
 /// 解析存款日志事件
 fn parse_deposit_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option<DexEvent> {
+    // Note: event_type will be set by instruction parser
     if let Some(event) = pump_swap_deposit_event_log_decode(data) {
         Some(DexEvent::PumpSwapDepositEvent(PumpSwapDepositEvent { metadata, ..event }))
     } else {
@@ -110,6 +120,7 @@ fn parse_deposit_inner_instruction(data: &[u8], metadata: EventMetadata) -> Opti
 
 /// 解析提款日志事件
 fn parse_withdraw_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option<DexEvent> {
+    // Note: event_type will be set by instruction parser
     if let Some(event) = pump_swap_withdraw_event_log_decode(data) {
         Some(DexEvent::PumpSwapWithdrawEvent(PumpSwapWithdrawEvent { metadata, ..event }))
     } else {
@@ -121,9 +132,11 @@ fn parse_withdraw_inner_instruction(data: &[u8], metadata: EventMetadata) -> Opt
 fn parse_buy_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
-    if data.len() < 16 || accounts.len() < 11 {
+    metadata.event_type = EventType::PumpSwapBuy;
+
+    if data.len() < 16 || accounts.len() < 13 {
         return None;
     }
 
@@ -156,9 +169,11 @@ fn parse_buy_instruction(
 fn parse_sell_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
-    if data.len() < 16 || accounts.len() < 11 {
+    metadata.event_type = EventType::PumpSwapSell;
+
+    if data.len() < 16 || accounts.len() < 13 {
         return None;
     }
 
@@ -191,8 +206,10 @@ fn parse_sell_instruction(
 fn parse_create_pool_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::PumpSwapCreatePool;
+
     if data.len() < 18 || accounts.len() < 11 {
         return None;
     }
@@ -230,8 +247,10 @@ fn parse_create_pool_instruction(
 fn parse_deposit_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::PumpSwapDeposit;
+
     if data.len() < 24 || accounts.len() < 11 {
         return None;
     }
@@ -262,8 +281,10 @@ fn parse_deposit_instruction(
 fn parse_withdraw_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::PumpSwapWithdraw;
+
     if data.len() < 24 || accounts.len() < 11 {
         return None;
     }

@@ -1,8 +1,6 @@
-use crate::streaming::common::SimdUtils;
 use crate::streaming::event_parser::common::filter::EventTypeFilter;
 use crate::streaming::event_parser::common::high_performance_clock::elapsed_micros_since;
-use crate::streaming::event_parser::common::EventMetadata;
-use crate::streaming::event_parser::core::parser_cache::get_account_configs;
+use crate::streaming::event_parser::common::{EventMetadata, EventType, ProtocolType};
 use crate::streaming::event_parser::core::traits::DexEvent;
 use crate::streaming::event_parser::Protocol;
 use crate::streaming::grpc::AccountPretty;
@@ -63,46 +61,93 @@ impl AccountEventParser {
         account: AccountPretty,
         event_type_filter: Option<&EventTypeFilter>,
     ) -> Option<DexEvent> {
-        // 直接从 parser_cache 获取配置
-        let configs = get_account_configs(
-            protocols,
-            event_type_filter,
-            Self::parse_nonce_account_event,
-            Self::parse_token_account_event,
-        );
-        for config in configs {
-            if config.program_id == Pubkey::default()
-                || (account.owner == config.program_id
-                && SimdUtils::fast_discriminator_match(
-                &account.data,
-                config.account_discriminator,
-            ))
-            {
-                let event = (config.account_parser)(
-                    &account,
-                    EventMetadata {
+        use crate::streaming::event_parser::core::dispatcher::EventDispatcher;
+
+        // 1. 尝试从账户 discriminator 解析（协议特定账户）
+        if account.data.len() >= 8 {
+            let discriminator = &account.data[0..8];
+
+            // 尝试识别协议类型
+            if let Some(protocol) = EventDispatcher::match_protocol_by_program_id(&account.owner) {
+                // 检查是否在请求的协议列表中
+                if protocols.contains(&protocol) {
+                    // 构建临时元数据（protocol会被dispatcher设置，event_type会在parser中设置）
+                    let metadata = EventMetadata {
                         slot: account.slot,
                         signature: account.signature,
-                        protocol: config.protocol_type,
-                        event_type: config.event_type,
-                        program_id: config.program_id,
+                        protocol: ProtocolType::Common, // 会被 EventDispatcher::dispatch_account 设置
+                        event_type: EventType::default(), // 会被具体 parser 设置
+                        program_id: account.owner,
                         recv_us: account.recv_us,
                         handle_us: elapsed_micros_since(account.recv_us),
                         ..Default::default()
-                    },
-                );
-                if event.is_some() {
-                    return event;
+                    };
+
+                    // 使用 dispatcher 解析
+                    if let Some(event) = EventDispatcher::dispatch_account(
+                        protocol,
+                        discriminator,
+                        &account,
+                        metadata,
+                    ) {
+                        // 应用事件类型过滤
+                        if let Some(filter) = event_type_filter {
+                            if filter.include.contains(&event.metadata().event_type) {
+                                return Some(event);
+                            }
+                            // 不匹配过滤器，继续尝试其他解析方式
+                        } else {
+                            return Some(event);
+                        }
+                    }
                 }
             }
         }
+
+        // 2. 尝试解析特殊账户类型（Token、Nonce等）
+        // 这些是通用的，不属于特定协议
+        let metadata = EventMetadata {
+            slot: account.slot,
+            signature: account.signature,
+            protocol: ProtocolType::Common,
+            event_type: EventType::default(),
+            program_id: account.owner,
+            recv_us: account.recv_us,
+            handle_us: elapsed_micros_since(account.recv_us),
+            ..Default::default()
+        };
+
+        // 尝试解析 Nonce 账户
+        if let Some(event) = Self::parse_nonce_account_event(&account, metadata.clone()) {
+            if let Some(filter) = event_type_filter {
+                if filter.include.contains(&event.metadata().event_type) {
+                    return Some(event);
+                }
+            } else {
+                return Some(event);
+            }
+        }
+
+        // 尝试解析 Token 账户
+        if let Some(event) = Self::parse_token_account_event(&account, metadata) {
+            if let Some(filter) = event_type_filter {
+                if filter.include.contains(&event.metadata().event_type) {
+                    return Some(event);
+                }
+            } else {
+                return Some(event);
+            }
+        }
+
         None
     }
 
     pub fn parse_token_account_event(
         account: &AccountPretty,
-        metadata: EventMetadata,
+        mut metadata: EventMetadata,
     ) -> Option<DexEvent> {
+        metadata.event_type = EventType::TokenAccount;
+
         let pubkey = account.pubkey;
         let executable = account.executable;
         let lamports = account.lamports;
@@ -169,8 +214,10 @@ impl AccountEventParser {
 
     pub fn parse_nonce_account_event(
         account: &AccountPretty,
-        metadata: EventMetadata,
+        mut metadata: EventMetadata,
     ) -> Option<DexEvent> {
+        metadata.event_type = EventType::NonceAccount;
+
         if let Ok(info) = parse_nonce(&account.data) {
             match info {
                 solana_account_decoder::parse_nonce::UiNonceState::Initialized(details) => {

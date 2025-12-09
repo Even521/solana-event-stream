@@ -369,6 +369,25 @@ impl MetricsManager {
         }
     }
 
+    /// 检查并警告高延迟 (校准后的 gRPC latency)
+    /// latency = recv_time - (block_time + 500ms)
+    #[inline]
+    pub fn check_and_warn_high_latency(&self, recv_us: i64, block_time_ms: i64) {
+        let recv_ms = recv_us / 1000;
+        // 校准延迟: recv_time - (block_time + 500ms)
+        let adjusted_latency_ms = recv_ms - (block_time_ms + SOLANA_BLOCK_TIME_ADJUSTMENT_MS);
+
+        if adjusted_latency_ms > MAX_LATENCY_THRESHOLD_MS {
+            log::warn!(
+                "⚠️  High gRPC latency: {}ms (threshold: {}ms, raw: recv={}ms, block={}ms)",
+                adjusted_latency_ms,
+                MAX_LATENCY_THRESHOLD_MS,
+                recv_ms,
+                block_time_ms
+            );
+        }
+    }
+
     /// 获取运行时长
     pub fn get_uptime(&self) -> std::time::Duration {
         std::time::Duration::from_secs_f64(GLOBAL_METRICS.get_uptime_seconds())
@@ -479,6 +498,20 @@ impl MetricsManager {
     ) {
         self.record_events(event_type, events_processed, processing_time_us);
         self.log_slow_processing(processing_time_us, events_processed as usize);
+    }
+
+    /// 更新指标并检查延迟
+    #[inline]
+    pub fn update_metrics_with_latency(
+        &self,
+        event_type: MetricsEventType,
+        events_processed: u64,
+        processing_time_us: f64,
+        recv_us: i64,
+        block_time_ms: i64,
+    ) {
+        self.check_and_warn_high_latency(recv_us, block_time_ms);
+        self.update_metrics(event_type, events_processed, processing_time_us);
     }
 
     /// 增加丢弃事件计数

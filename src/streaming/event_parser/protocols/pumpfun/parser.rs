@@ -1,11 +1,9 @@
-use log::{info, warn};
 use crate::streaming::event_parser::{
-    common::{EventMetadata, EventType, ProtocolType},
-    core::GenericEventParseConfig,
+    common::{EventMetadata, EventType},
     protocols::pumpfun::{
-        discriminators, pumpfun_create_token_event_log_decode, pumpfun_migrate_event_log_decode,
-        pumpfun_trade_event_log_decode, PumpFunCreateTokenEvent, PumpFunMigrateEvent,
-        PumpFunTradeEvent,
+        discriminators, pumpfun_create_v2_token_event_log_decode, pumpfun_migrate_event_log_decode,
+        pumpfun_trade_event_log_decode, PumpFunCreateTokenEvent, PumpFunCreateV2TokenEvent,
+        PumpFunMigrateEvent, PumpFunTradeEvent,
     },
     DexEvent,
 };
@@ -15,54 +13,71 @@ use solana_sdk::pubkey::Pubkey;
 pub const PUMPFUN_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
 
-// 配置所有事件类型
-pub const CONFIGS: &[GenericEventParseConfig] = &[
-    GenericEventParseConfig {
-        program_id: PUMPFUN_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpFun,
-        inner_instruction_discriminator: discriminators::CREATE_TOKEN_EVENT,
-        instruction_discriminator: discriminators::CREATE_TOKEN_IX,
-        event_type: EventType::PumpFunCreateToken,
-        inner_instruction_parser: Some(parse_create_token_inner_instruction),
-        instruction_parser: Some(parse_create_token_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: PUMPFUN_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpFun,
-        inner_instruction_discriminator: discriminators::TRADE_EVENT,
-        instruction_discriminator: discriminators::BUY_IX,
-        event_type: EventType::PumpFunBuy,
-        inner_instruction_parser: Some(parse_trade_inner_instruction),
-        instruction_parser: Some(parse_buy_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: PUMPFUN_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpFun,
-        inner_instruction_discriminator: discriminators::TRADE_EVENT,
-        instruction_discriminator: discriminators::SELL_IX,
-        event_type: EventType::PumpFunSell,
-        inner_instruction_parser: Some(parse_trade_inner_instruction),
-        instruction_parser: Some(parse_sell_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: PUMPFUN_PROGRAM_ID,
-        protocol_type: ProtocolType::PumpFun,
-        inner_instruction_discriminator: discriminators::COMPLETE_PUMP_AMM_MIGRATION_EVENT,
-        instruction_discriminator: discriminators::MIGRATE_IX,
-        event_type: EventType::PumpFunMigrate,
-        inner_instruction_parser: Some(parse_migrate_inner_instruction),
-        instruction_parser: Some(parse_migrate_instruction),
-        // Failed migrations lack inner instruction data (typically "Bonding curve already migrated")
-        requires_inner_instruction: true,
-    },
-];
+/// 解析 PumpFun instruction data
+///
+/// 根据判别器路由到具体的 instruction 解析函数
+pub fn parse_pumpfun_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::CREATE_TOKEN_IX => parse_create_token_instruction(data, accounts, metadata),
+        discriminators::CREATE_V2_TOKEN_IX => {
+            parse_create_v2_token_instruction(data, accounts, metadata)
+        }
+        discriminators::BUY_IX => parse_buy_instruction(data, accounts, metadata),
+        discriminators::SELL_IX => parse_sell_instruction(data, accounts, metadata),
+        discriminators::MIGRATE_IX => parse_migrate_instruction(data, accounts, metadata),
+        _ => None,
+    }
+}
+
+/// 解析 PumpFun inner instruction data
+///
+/// 根据判别器路由到具体的 inner instruction 解析函数
+pub fn parse_pumpfun_inner_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::CREATE_TOKEN_EVENT => parse_create_token_inner_instruction(data, metadata),
+        discriminators::TRADE_EVENT => parse_trade_inner_instruction(data, metadata),
+        discriminators::COMPLETE_PUMP_AMM_MIGRATION_EVENT => {
+            parse_migrate_inner_instruction(data, metadata)
+        }
+        _ => None,
+    }
+}
+
+/// 解析 PumpFun 账户数据
+///
+/// 根据判别器路由到具体的账户解析函数
+pub fn parse_pumpfun_account_data(
+    discriminator: &[u8],
+    account: &crate::streaming::grpc::AccountPretty,
+    metadata: crate::streaming::event_parser::common::EventMetadata,
+) -> Option<crate::streaming::event_parser::DexEvent> {
+    match discriminator {
+        discriminators::BONDING_CURVE_ACCOUNT => {
+            crate::streaming::event_parser::protocols::pumpfun::types::bonding_curve_parser(
+                account, metadata,
+            )
+        }
+        discriminators::GLOBAL_ACCOUNT => {
+            crate::streaming::event_parser::protocols::pumpfun::types::global_parser(
+                account, metadata,
+            )
+        }
+        _ => None,
+    }
+}
 
 /// 解析迁移事件
-fn parse_migrate_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option<DexEvent> {
-    warn!("=====parse_migrate_inner_instruction======= {:?}", data);
+fn parse_migrate_inner_instruction(data: &[u8], mut metadata: EventMetadata) -> Option<DexEvent> {
+    metadata.event_type = EventType::PumpFunMigrate;
     if let Some(event) = pumpfun_migrate_event_log_decode(data) {
         Some(DexEvent::PumpFunMigrateEvent(PumpFunMigrateEvent { metadata, ..event }))
     } else {
@@ -73,17 +88,20 @@ fn parse_migrate_inner_instruction(data: &[u8], metadata: EventMetadata) -> Opti
 /// 解析创建代币日志事件
 fn parse_create_token_inner_instruction(
     data: &[u8],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
-    if let Some(event) = pumpfun_create_token_event_log_decode(data) {
-        Some(DexEvent::PumpFunCreateTokenEvent(PumpFunCreateTokenEvent { metadata, ..event }))
+    metadata.event_type = EventType::PumpFunCreateToken;
+    if let Some(event) = pumpfun_create_v2_token_event_log_decode(data) {
+        Some(DexEvent::PumpFunCreateV2TokenEvent(PumpFunCreateV2TokenEvent { metadata, ..event }))
     } else {
         None
     }
 }
 
-/// 解析交易事件
+/// 解析交易事件 (inner instruction 不设置 event_type，因为不知道是 Buy 还是 Sell)
 fn parse_trade_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option<DexEvent> {
+    // 注意：inner instruction 的 trade event 不设置 event_type
+    // 因为它会被合并到 instruction event 中，而 instruction event 已经设置了正确的 event_type
     if let Some(event) = pumpfun_trade_event_log_decode(data) {
         Some(DexEvent::PumpFunTradeEvent(PumpFunTradeEvent { metadata, ..event }))
     } else {
@@ -95,8 +113,10 @@ fn parse_trade_inner_instruction(data: &[u8], metadata: EventMetadata) -> Option
 fn parse_create_token_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::PumpFunCreateToken;
+
     if data.len() < 16 || accounts.len() < 11 {
         return None;
     }
@@ -152,13 +172,78 @@ fn parse_create_token_instruction(
     }))
 }
 
+/// 解析创建 V2 代币指令事件 (SPL-22 Token, Mayhem Mode)
+fn parse_create_v2_token_instruction(
+    data: &[u8],
+    accounts: &[Pubkey],
+    mut metadata: EventMetadata,
+) -> Option<DexEvent> {
+    metadata.event_type = EventType::PumpFunCreateV2Token;
+
+    if data.len() < 16 || accounts.len() < 11 {
+        return None;
+    }
+    let mut offset = 0;
+    if offset + 4 > data.len() {
+        return None;
+    }
+    let name_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    if offset + name_len > data.len() {
+        return None;
+    }
+    let name = String::from_utf8_lossy(&data[offset..offset + name_len]);
+    offset += name_len;
+    if offset + 4 > data.len() {
+        return None;
+    }
+    let symbol_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    if offset + symbol_len > data.len() {
+        return None;
+    }
+    let symbol = String::from_utf8_lossy(&data[offset..offset + symbol_len]);
+    offset += symbol_len;
+    if offset + 4 > data.len() {
+        return None;
+    }
+    let uri_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    if offset + uri_len > data.len() {
+        return None;
+    }
+    let uri = String::from_utf8_lossy(&data[offset..offset + uri_len]);
+    offset += uri_len;
+    let creator = if offset + 32 <= data.len() {
+        Pubkey::new_from_array(data[offset..offset + 32].try_into().ok()?)
+    } else {
+        Pubkey::default()
+    };
+
+    Some(DexEvent::PumpFunCreateV2TokenEvent(PumpFunCreateV2TokenEvent {
+        metadata,
+        name: name.to_string(),
+        symbol: symbol.to_string(),
+        uri: uri.to_string(),
+        creator,
+        mint: accounts[0],
+        mint_authority: accounts[1],
+        bonding_curve: accounts[2],
+        associated_bonding_curve: accounts[3],
+        user: accounts[7],
+        ..Default::default()
+    }))
+}
+
 // 解析买入指令事件
 fn parse_buy_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
-    if data.len() < 16 || accounts.len() < 13 {
+    metadata.event_type = EventType::PumpFunBuy;
+
+    if data.len() < 16 || accounts.len() < 16 {
         return None;
     }
     let amount = u64::from_le_bytes(data[0..8].try_into().unwrap());
@@ -179,6 +264,8 @@ fn parse_buy_instruction(
         program: accounts[11],
         global_volume_accumulator: accounts[12],
         user_volume_accumulator: accounts[13],
+        fee_config: accounts[14],
+        fee_program: accounts[15],
         max_sol_cost,
         amount,
         is_buy: true,
@@ -190,9 +277,11 @@ fn parse_buy_instruction(
 fn parse_sell_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
-    if data.len() < 16 || accounts.len() < 11 {
+    metadata.event_type = EventType::PumpFunSell;
+
+    if data.len() < 16 || accounts.len() < 14 {
         return None;
     }
     let amount = u64::from_le_bytes(data[0..8].try_into().unwrap());
@@ -211,8 +300,10 @@ fn parse_sell_instruction(
         token_program: accounts[9],
         event_authority: accounts[10],
         program: accounts[11],
-        global_volume_accumulator: *accounts.get(12).unwrap_or(&Pubkey::default()),
-        user_volume_accumulator: *accounts.get(13).unwrap_or(&Pubkey::default()),
+        global_volume_accumulator: Pubkey::default(),
+        user_volume_accumulator: Pubkey::default(),
+        fee_config: accounts[12],
+        fee_program: accounts[13],
         min_sol_output,
         amount,
         is_buy: false,
@@ -224,9 +315,10 @@ fn parse_sell_instruction(
 fn parse_migrate_instruction(
     _data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
-    warn!("=====parse_migrate_inner_instruction======= {:?}", _data);
+    metadata.event_type = EventType::PumpFunMigrate;
+
     if accounts.len() < 24 {
         return None;
     }

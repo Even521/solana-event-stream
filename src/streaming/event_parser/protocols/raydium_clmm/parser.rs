@@ -1,9 +1,9 @@
+
 use crate::streaming::event_parser::{
     common::{
         read_i32_le, read_option_bool, read_u128_le, read_u64_le, read_u8_le, EventMetadata,
-        EventType, ProtocolType,
+        EventType,
     },
-    core::GenericEventParseConfig,
     protocols::raydium_clmm::{
         discriminators, RaydiumClmmClosePositionEvent, RaydiumClmmCreatePoolEvent,
         RaydiumClmmDecreaseLiquidityV2Event, RaydiumClmmIncreaseLiquidityV2Event,
@@ -18,96 +18,80 @@ use solana_sdk::pubkey::Pubkey;
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
-// 配置所有事件类型
-pub const CONFIGS: &[GenericEventParseConfig] = &[
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::SWAP,
-        event_type: EventType::RaydiumClmmSwap,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_swap_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::SWAP_V2,
-        event_type: EventType::RaydiumClmmSwapV2,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_swap_v2_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::CLOSE_POSITION,
-        event_type: EventType::RaydiumClmmClosePosition,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_close_position_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::DECREASE_LIQUIDITY_V2,
-        event_type: EventType::RaydiumClmmDecreaseLiquidityV2,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_decrease_liquidity_v2_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::CREATE_POOL,
-        event_type: EventType::RaydiumClmmCreatePool,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_create_pool_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::INCREASE_LIQUIDITY_V2,
-        event_type: EventType::RaydiumClmmIncreaseLiquidityV2,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_increase_liquidity_v2_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::OPEN_POSITION_WITH_TOKEN_22_NFT,
-        event_type: EventType::RaydiumClmmOpenPositionWithToken22Nft,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_open_position_with_token_22_nft_instruction),
-        requires_inner_instruction: false,
-    },
-    GenericEventParseConfig {
-        program_id: RAYDIUM_CLMM_PROGRAM_ID,
-        protocol_type: ProtocolType::RaydiumClmm,
-        inner_instruction_discriminator: &[],
-        instruction_discriminator: discriminators::OPEN_POSITION_V2,
-        event_type: EventType::RaydiumClmmOpenPositionV2,
-        inner_instruction_parser: None,
-        instruction_parser: Some(parse_open_position_v2_instruction),
-        requires_inner_instruction: false,
-    },
-];
+/// 解析 Raydium CLMM instruction data
+///
+/// 根据判别器路由到具体的 instruction 解析函数
+pub fn parse_raydium_clmm_instruction_data(
+    discriminator: &[u8],
+    data: &[u8],
+    accounts: &[Pubkey],
+    metadata: EventMetadata,
+) -> Option<DexEvent> {
+    match discriminator {
+        discriminators::SWAP => parse_swap_instruction(data, accounts, metadata),
+        discriminators::SWAP_V2 => parse_swap_v2_instruction(data, accounts, metadata),
+        discriminators::CLOSE_POSITION => {
+            parse_close_position_instruction(data, accounts, metadata)
+        }
+        discriminators::DECREASE_LIQUIDITY_V2 => {
+            parse_decrease_liquidity_v2_instruction(data, accounts, metadata)
+        }
+        discriminators::CREATE_POOL => parse_create_pool_instruction(data, accounts, metadata),
+        discriminators::INCREASE_LIQUIDITY_V2 => {
+            parse_increase_liquidity_v2_instruction(data, accounts, metadata)
+        }
+        discriminators::OPEN_POSITION_WITH_TOKEN_22_NFT => {
+            parse_open_position_with_token_22_nft_instruction(data, accounts, metadata)
+        }
+        discriminators::OPEN_POSITION_V2 => {
+            parse_open_position_v2_instruction(data, accounts, metadata)
+        }
+        _ => None,
+    }
+}
+
+/// 解析 Raydium CLMM inner instruction data
+///
+/// Raydium CLMM 没有 inner instruction 事件
+pub fn parse_raydium_clmm_inner_instruction_data(
+    _discriminator: &[u8],
+    _data: &[u8],
+    _metadata: EventMetadata,
+) -> Option<DexEvent> {
+    None
+}
+
+
+/// 解析 Raydium CLMM 账户数据
+///
+/// 根据判别器路由到具体的账户解析函数
+pub fn parse_raydium_clmm_account_data(
+    discriminator: &[u8],
+    account: &crate::streaming::grpc::AccountPretty,
+    metadata: crate::streaming::event_parser::common::EventMetadata,
+) -> Option<crate::streaming::event_parser::DexEvent> {
+    match discriminator {
+        discriminators::AMM_CONFIG => {
+            crate::streaming::event_parser::protocols::raydium_clmm::types::amm_config_parser(account, metadata)
+        }
+        discriminators::POOL_STATE => {
+            crate::streaming::event_parser::protocols::raydium_clmm::types::pool_state_parser(account, metadata)
+        }
+        discriminators::TICK_ARRAY_STATE => {
+            crate::streaming::event_parser::protocols::raydium_clmm::types::tick_array_state_parser(account, metadata)
+        }
+        _ => None,
+    }
+}
 
 /// 解析打开仓位V2指令事件
 fn parse_open_position_v2_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmOpenPositionV2;
+
     if data.len() < 51 || accounts.len() < 22 {
         return None;
     }
@@ -152,8 +136,10 @@ fn parse_open_position_v2_instruction(
 fn parse_open_position_with_token_22_nft_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmOpenPositionWithToken22Nft;
+
     if data.len() < 51 || accounts.len() < 20 {
         return None;
     }
@@ -197,8 +183,10 @@ fn parse_open_position_with_token_22_nft_instruction(
 fn parse_increase_liquidity_v2_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmIncreaseLiquidityV2;
+
     if data.len() < 34 || accounts.len() < 15 {
         return None;
     }
@@ -230,8 +218,10 @@ fn parse_increase_liquidity_v2_instruction(
 fn parse_create_pool_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmCreatePool;
+
     if data.len() < 24 || accounts.len() < 13 {
         return None;
     }
@@ -259,8 +249,10 @@ fn parse_create_pool_instruction(
 fn parse_decrease_liquidity_v2_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmDecreaseLiquidityV2;
+
     if data.len() < 32 || accounts.len() < 16 {
         return None;
     }
@@ -293,8 +285,10 @@ fn parse_decrease_liquidity_v2_instruction(
 fn parse_close_position_instruction(
     _data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmClosePosition;
+
     if accounts.len() < 6 {
         return None;
     }
@@ -313,8 +307,10 @@ fn parse_close_position_instruction(
 fn parse_swap_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmSwap;
+
     if data.len() < 33 || accounts.len() < 10 {
         return None;
     }
@@ -347,8 +343,10 @@ fn parse_swap_instruction(
 fn parse_swap_v2_instruction(
     data: &[u8],
     accounts: &[Pubkey],
-    metadata: EventMetadata,
+    mut metadata: EventMetadata,
 ) -> Option<DexEvent> {
+    metadata.event_type = EventType::RaydiumClmmSwapV2;
+
     if data.len() < 33 || accounts.len() < 13 {
         return None;
     }
