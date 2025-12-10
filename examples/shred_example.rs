@@ -3,6 +3,9 @@ use solana_event_stream::streaming::{
     shred::StreamClientConfig,
     ShredStreamGrpc,
 };
+use solana_event_stream::streaming::event_parser::common::EventType;
+use solana_event_stream::streaming::event_parser::common::filter::EventTypeFilter;
+use solana_event_stream::streaming::event_parser::protocols::pumpfun::PumpFunMigrateEvent;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,15 +30,19 @@ async fn test_shreds() -> Result<(), Box<dyn std::error::Error>> {
         Protocol::PumpSwap,
     ];
 
-    // Event filtering
-    // No event filtering, includes all events
-    let event_type_filter = None;
-    // Only include PumpSwapBuy events and PumpSwapSell events
-    // let event_type_filter =
-    //     EventTypeFilter { include: vec![EventType::PumpSwapBuy, EventType::PumpSwapSell] };
+    let protocols = vec![Protocol::PumpFun, Protocol::PumpSwap];
+    let event_type_filter = EventTypeFilter {
+        include: vec![
+            EventType::PumpFunCreateToken,
+            EventType::PumpFunBuy,
+            EventType::PumpFunSell,
+            EventType::PumpFunMigrate,
+        ],
+    };
 
-    println!("Listening for events, press Ctrl+C to stop...");
-    shred_stream.shredstream_subscribe(protocols, None, event_type_filter, callback).await?;
+    shred_stream.shredstream_subscribe(protocols, None, Some(event_type_filter), callback).await?;
+
+   //shred_stream.shredstream_subscribe(protocols, None, event_type_filter, callback).await?;
 
     // // 支持 stop 方法，测试代码 - 异步1000秒之后停止
     // let shred_clone = shred_stream.clone();
