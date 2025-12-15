@@ -5,7 +5,7 @@ use solana_event_stream::streaming::{
 };
 use solana_event_stream::streaming::event_parser::common::EventType;
 use solana_event_stream::streaming::event_parser::common::filter::EventTypeFilter;
-use solana_event_stream::streaming::event_parser::protocols::pumpfun::PumpFunMigrateEvent;
+use solana_event_stream::streaming::event_parser::DexEvent::PumpFunCreateTokenEvent;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,17 +20,16 @@ async fn test_shreds() -> Result<(), Box<dyn std::error::Error>> {
     // Create low-latency configuration
     let mut config = StreamClientConfig::default();
     // Enable performance monitoring, has performance overhead, disabled by default
-    config.enable_metrics = true;
+    config.enable_metrics = false;
     let shred_stream =
-        ShredStreamGrpc::new_with_config("http://104.204.141.91:10800".to_string(), config).await?;
+        ShredStreamGrpc::new_with_config(" ".to_string(), config).await?;
 
     let callback = create_event_callback();
     let protocols = vec![
         Protocol::PumpFun,
-        Protocol::PumpSwap,
     ];
 
-    let protocols = vec![Protocol::PumpFun, Protocol::PumpSwap];
+    let protocols = vec![Protocol::PumpFun];
     let event_type_filter = EventTypeFilter {
         include: vec![
             EventType::PumpFunCreateToken,
@@ -40,7 +39,7 @@ async fn test_shreds() -> Result<(), Box<dyn std::error::Error>> {
         ],
     };
 
-    shred_stream.shredstream_subscribe(protocols, None, Some(event_type_filter), callback).await?;
+    shred_stream.shredstream_subscribe(protocols, None, event_type_filter, callback).await?;
 
    //shred_stream.shredstream_subscribe(protocols, None, event_type_filter, callback).await?;
 
@@ -59,14 +58,12 @@ async fn test_shreds() -> Result<(), Box<dyn std::error::Error>> {
 
 fn create_event_callback() -> impl Fn(DexEvent) {
     |event: DexEvent| {
-        // println!(
-        //     "🎉 Event received! Type: {:?}, transaction_index: {:?}",
-        //     event.metadata().event_type,
-        //     event.metadata().transaction_index
-        // );
         match event {
             DexEvent::PumpFunMigrateEvent(e) => {
                 println!("PumpFunMigrateEvent: {:?} mint:{:?}", e.metadata.handle_us,e.user);
+            }
+            DexEvent::PumpFunCreateTokenEvent(e) =>{
+                println!("PumpFunCreateTokenEvent: {:?} event:{:?}", e.metadata.handle_us,e);
             }
             _ => {}
         }

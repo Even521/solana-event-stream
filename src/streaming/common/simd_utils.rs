@@ -1,4 +1,5 @@
 use wide::*;
+use wide::CmpEq;
 
 /// SIMD-accelerated data parsing utilities
 pub struct SimdUtils;
@@ -29,7 +30,7 @@ impl SimdUtils {
             let chunk_a = u8x16::from(&a[offset..offset + 16]);
             let chunk_b = u8x16::from(&b[offset..offset + 16]);
 
-            if !chunk_a.cmp_eq(chunk_b).all() {
+            if !chunk_a.simd_eq(chunk_b).all() {
                 return false;
             }
         }
@@ -90,7 +91,7 @@ impl SimdUtils {
                 // Use SIMD to process 16-byte discriminators
                 let data_chunk = u8x16::from(&data[..16]);
                 let disc_chunk = u8x16::from(discriminator);
-                data_chunk.cmp_eq(disc_chunk).all()
+                data_chunk.simd_eq(disc_chunk).all()
             }
             _ => {
                 // For other lengths, use generic SIMD comparison
@@ -128,7 +129,7 @@ impl SimdUtils {
                 let chunk = &haystack[start..start + 16];
                 let target_vec = u8x16::splat(first_byte);
                 let chunk_vec = u8x16::from(chunk);
-                let matches = chunk_vec.cmp_eq(target_vec);
+                let matches = chunk_vec.simd_eq(target_vec);
 
                 // Check each match position
                 let matches_array: [u8; 16] = matches.into();

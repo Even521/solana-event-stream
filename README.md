@@ -19,4 +19,5 @@ Solana Streamer
 ## 启动
 ```
 cargo run --example shred_stream
+cargo run --example grcp
 ```
